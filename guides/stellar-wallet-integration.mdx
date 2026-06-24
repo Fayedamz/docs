@@ -1,19 +1,19 @@
 ---
 title: "Stellar Wallet Integration"
-description: "Connect Freighter, Albedo, xBull, and LOBSTR to Wraith stealth payments — wallet picker UI, session persistence, mobile patterns, and Stellar Wallets Kit"
+description: "Connect Freighter, Albedo, xBull, and LOBSTR to Wraith stealth payments"
 ---
 
-Wraith's demo ships multi-wallet support for the four main Stellar browser wallets. This guide shows you how to integrate each one, build a wallet picker, persist sessions, and handle mobile users.
+Wraith's demo ships multi-wallet support for the four main Stellar browser wallets. This guide covers per-wallet setup, a wallet picker UI, session persistence, and mobile handling.
 
 ## Supported Wallets
 
 | Wallet | Type | Soroban Auth | Fee-bump Signing | Mobile | Install Required |
 |---|---|---|---|---|---|
-| **Freighter** | Browser extension | Yes | Yes | No | Yes |
-| **Albedo** | Web (iframe) | Yes | Yes | Yes (web) | No |
-| **xBull** | Browser extension | Yes | Yes | Yes (PWA) | Yes |
-| **LOBSTR** | Mobile + extension | Yes | No | Yes | Yes |
-| **WalletConnect v2** | Protocol | Yes | Yes | Yes | No |
+| Freighter | Browser extension | Yes | Yes | No | Yes |
+| Albedo | Web iframe | Yes | Yes | Yes | No |
+| xBull | Browser extension | Yes | Yes | Yes | Yes |
+| LOBSTR | Mobile + extension | Yes | No | Yes | Yes |
+| WalletConnect v2 | Protocol | Yes | Yes | Yes | No |
 
 ---
 
@@ -23,31 +23,25 @@ Wraith's demo ships multi-wallet support for the four main Stellar browser walle
 npm install @stellar/stellar-sdk @wraith-protocol/sdk
 ```
 
-Per-wallet packages (install only what you need):
+Install only the wallet packages you need:
 
 ```bash
-npm install @stellar/freighter-api   # Freighter
-npm install albedo-link              # Albedo
-npm install @xbull/sdk               # xBull
-npm install @lobstrco/signer-extension-api  # LOBSTR
+npm install @stellar/freighter-api
+npm install albedo-link
+npm install @xbull/sdk
+npm install @lobstrco/signer-extension-api
 ```
 
 ---
 
 ## Freighter
 
-[Freighter](https://www.freighter.app) is the most widely used Stellar browser extension. It supports full Soroban auth and fee-bump signing.
+[Freighter](https://www.freighter.app) is the most widely used Stellar browser extension. Supports full Soroban auth and fee-bump signing.
 
-### Install and connect
+### Connect
 
 ```typescript
-import {
-  isConnected,
-  requestAccess,
-  getPublicKey,
-  signTransaction,
-  signAuthEntry,
-} from "@stellar/freighter-api";
+import { isConnected, requestAccess, getPublicKey } from "@stellar/freighter-api";
 
 async function connectFreighter(): Promise<string> {
   const connected = await isConnected();
@@ -55,18 +49,13 @@ async function connectFreighter(): Promise<string> {
     throw new Error("Freighter extension not installed");
   }
 
-  // Prompt user to grant access
   const accessResult = await requestAccess();
-  if (accessResult.error) {
-    throw new Error(accessResult.error);
-  }
+  if (accessResult.error) throw new Error(accessResult.error);
 
   const pubkeyResult = await getPublicKey();
-  if (pubkeyResult.error) {
-    throw new Error(pubkeyResult.error);
-  }
+  if (pubkeyResult.error) throw new Error(pubkeyResult.error);
 
-  return pubkeyResult.publicKey; // "G..."
+  return pubkeyResult.publicKey;
 }
 ```
 
@@ -82,11 +71,11 @@ async function signWithFreighter(xdr: string, networkPassphrase: string): Promis
 }
 ```
 
-### Derive stealth keys with Freighter
+### Derive stealth keys
 
 ```typescript
-import { STEALTH_SIGNING_MESSAGE } from "@wraith-protocol/sdk/chains/stellar";
 import { signMessage } from "@stellar/freighter-api";
+import { deriveStealthKeys, STEALTH_SIGNING_MESSAGE } from "@wraith-protocol/sdk/chains/stellar";
 
 async function deriveKeysWithFreighter() {
   const result = await signMessage(STEALTH_SIGNING_MESSAGE, {
@@ -94,28 +83,25 @@ async function deriveKeysWithFreighter() {
   });
   if (result.error) throw new Error(result.error);
 
-  // result.signedMessage is a base64-encoded 64-byte ed25519 signature
   const sigBytes = Buffer.from(result.signedMessage, "base64");
-
-  const { deriveStealthKeys } = await import("@wraith-protocol/sdk/chains/stellar");
   return deriveStealthKeys(sigBytes);
 }
 ```
 
-### Check if Freighter is installed
+### Check if installed
 
 ```typescript
 import { isConnected } from "@stellar/freighter-api";
 
 const available = await isConnected();
-// false if extension not installed — show install prompt
+// false if not installed — show install prompt
 ```
 
 ---
 
 ## Albedo
 
-[Albedo](https://albedo.link) runs entirely in an iframe — no extension required. It works in any browser and on mobile web.
+[Albedo](https://albedo.link) runs in an iframe with no extension required. Works in any browser and on mobile web.
 
 ### Connect
 
@@ -123,10 +109,8 @@ const available = await isConnected();
 import albedo from "albedo-link";
 
 async function connectAlbedo(): Promise<string> {
-  const result = await albedo.publicKey({
-    require_existing: false,
-  });
-  return result.pubkey; // "G..."
+  const result = await albedo.publicKey({ require_existing: false });
+  return result.pubkey;
 }
 ```
 
@@ -138,35 +122,30 @@ import albedo from "albedo-link";
 async function signWithAlbedo(xdr: string, network: string): Promise<string> {
   const result = await albedo.tx({
     xdr,
-    network,        // "testnet" | "public"
-    submit: false,  // return signed XDR, don't auto-submit
+    network,
+    submit: false,
   });
   return result.signed_envelope_xdr;
 }
 ```
 
-### Derive stealth keys with Albedo
+### Derive stealth keys
 
 ```typescript
 import albedo from "albedo-link";
 import { deriveStealthKeys, STEALTH_SIGNING_MESSAGE } from "@wraith-protocol/sdk/chains/stellar";
 
 async function deriveKeysWithAlbedo() {
-  // Albedo's message signing returns a hex-encoded signature
-  const result = await albedo.signMessage({
-    message: STEALTH_SIGNING_MESSAGE,
-  });
-
+  const result = await albedo.signMessage({ message: STEALTH_SIGNING_MESSAGE });
   const sigBytes = Buffer.from(result.message_signature, "hex");
   return deriveStealthKeys(sigBytes);
 }
 ```
 
-### Albedo notes
-
+**Notes:**
 - No install required — best fallback for users without an extension
+- Popup-based — some browsers block it without a direct user gesture
 - Session token can be persisted (see [Session Persistence](#session-persistence))
-- Popup-based UX — some browsers may block it without a direct user gesture
 
 ---
 
@@ -183,30 +162,25 @@ const xbull = new xBullWalletConnect();
 
 async function connectXBull(): Promise<string> {
   await xbull.connect();
-  const publicKey = await xbull.getPublicKey();
-  return publicKey; // "G..."
+  return xbull.getPublicKey();
 }
 ```
 
 ### Sign a transaction
 
 ```typescript
-async function signWithXBull(xdr: string): Promise<string> {
-  const signedXdr = await xbull.sign({ xdr, publicKey });
-  return signedXdr;
+async function signWithXBull(xdr: string, publicKey: string): Promise<string> {
+  return xbull.sign({ xdr, publicKey });
 }
 ```
 
-### Derive stealth keys with xBull
+### Derive stealth keys
 
 ```typescript
 import { deriveStealthKeys, STEALTH_SIGNING_MESSAGE } from "@wraith-protocol/sdk/chains/stellar";
 
 async function deriveKeysWithXBull() {
-  const result = await xbull.signMessage({
-    message: STEALTH_SIGNING_MESSAGE,
-  });
-
+  const result = await xbull.signMessage({ message: STEALTH_SIGNING_MESSAGE });
   const sigBytes = Buffer.from(result.signature, "hex");
   return deriveStealthKeys(sigBytes);
 }
@@ -222,16 +196,15 @@ await xbull.disconnect();
 
 ## LOBSTR
 
-[LOBSTR](https://lobstr.co) is primarily a mobile wallet with a companion browser extension. It does not support fee-bump signing.
+[LOBSTR](https://lobstr.co) is a mobile wallet with a companion browser extension. Does not support fee-bump signing.
 
 ### Connect
 
 ```typescript
-import { lobstrSignTransaction, getLobstrPublicKey } from "@lobstrco/signer-extension-api";
+import { getLobstrPublicKey } from "@lobstrco/signer-extension-api";
 
 async function connectLOBSTR(): Promise<string> {
-  const publicKey = await getLobstrPublicKey();
-  return publicKey; // "G..."
+  return getLobstrPublicKey();
 }
 ```
 
@@ -241,22 +214,18 @@ async function connectLOBSTR(): Promise<string> {
 import { lobstrSignTransaction } from "@lobstrco/signer-extension-api";
 
 async function signWithLOBSTR(xdr: string): Promise<string> {
-  const signedXdr = await lobstrSignTransaction(xdr);
-  return signedXdr;
+  return lobstrSignTransaction(xdr);
 }
 ```
 
-### LOBSTR notes
-
-- Fee-bump signing is **not supported** — don't use LOBSTR as a fee sponsor
-- Best suited for mobile-first users who have the LOBSTR mobile app
-- The browser extension acts as a bridge to the mobile app — both must be installed
+**Notes:**
+- Fee-bump signing is not supported — do not use LOBSTR as a fee sponsor
+- Both the mobile app and browser extension must be installed
+- Best for mobile-first users
 
 ---
 
 ## Building a Wallet Picker
-
-The demo's `StellarWalletPicker` component is a good reference. Here's the pattern:
 
 ### Wallet descriptor type
 
@@ -266,13 +235,13 @@ export type StellarWalletId = "freighter" | "albedo" | "xbull" | "lobstr";
 export interface StellarWallet {
   id: StellarWalletId;
   name: string;
-  icon: string;           // URL or inline SVG
+  icon: string;
   downloadUrl: string;
   requiresExtension: boolean;
-  connect: () => Promise<string>;         // returns public key
+  isAvailable: () => Promise<boolean>;
+  connect: () => Promise<string>;
   signTransaction: (xdr: string) => Promise<string>;
   signMessage: (message: string) => Promise<Uint8Array>;
-  isAvailable: () => Promise<boolean>;
 }
 ```
 
@@ -283,6 +252,9 @@ import { isConnected as freighterIsConnected } from "@stellar/freighter-api";
 import albedo from "albedo-link";
 import { xBullWalletConnect } from "@xbull/sdk";
 import { getLobstrPublicKey } from "@lobstrco/signer-extension-api";
+
+const xbull = new xBullWalletConnect();
+const networkPassphrase = "Test SDF Network ; September 2015";
 
 export const STELLAR_WALLETS: StellarWallet[] = [
   {
@@ -306,7 +278,7 @@ export const STELLAR_WALLETS: StellarWallet[] = [
     icon: "/wallets/albedo.svg",
     downloadUrl: "https://albedo.link",
     requiresExtension: false,
-    isAvailable: async () => true, // always available
+    isAvailable: async () => true,
     connect: connectAlbedo,
     signTransaction: (xdr) => signWithAlbedo(xdr, "testnet"),
     signMessage: async (msg) => {
@@ -321,16 +293,11 @@ export const STELLAR_WALLETS: StellarWallet[] = [
     downloadUrl: "https://xbull.app",
     requiresExtension: true,
     isAvailable: async () => {
-      try {
-        const xb = new xBullWalletConnect();
-        await xb.connect();
-        return true;
-      } catch {
-        return false;
-      }
+      try { await new xBullWalletConnect().connect(); return true; }
+      catch { return false; }
     },
     connect: connectXBull,
-    signTransaction: (xdr) => signWithXBull(xdr),
+    signTransaction: (xdr) => xbull.sign({ xdr, publicKey: "" }),
     signMessage: async (msg) => {
       const res = await xbull.signMessage({ message: msg });
       return Buffer.from(res.signature, "hex");
@@ -343,25 +310,19 @@ export const STELLAR_WALLETS: StellarWallet[] = [
     downloadUrl: "https://lobstr.co",
     requiresExtension: true,
     isAvailable: async () => {
-      try {
-        await getLobstrPublicKey();
-        return true;
-      } catch {
-        return false;
-      }
+      try { await getLobstrPublicKey(); return true; }
+      catch { return false; }
     },
     connect: connectLOBSTR,
     signTransaction: signWithLOBSTR,
-    signMessage: async (_msg) => {
-      throw new Error("LOBSTR does not support message signing");
-    },
+    signMessage: async () => { throw new Error("LOBSTR does not support message signing"); },
   },
 ];
 ```
 
-### Wallet picker React component
+### Wallet picker (React)
 
-```tsx
+```typescript
 import { useState, useEffect } from "react";
 import { STELLAR_WALLETS, StellarWallet, StellarWalletId } from "./wallets";
 
@@ -374,10 +335,7 @@ export function StellarWalletPicker({ onConnect }: WalletPickerProps) {
 
   useEffect(() => {
     Promise.all(
-      STELLAR_WALLETS.map(async (w) => ({
-        id: w.id,
-        available: await w.isAvailable(),
-      }))
+      STELLAR_WALLETS.map(async (w) => ({ id: w.id, available: await w.isAvailable() }))
     ).then((results) => {
       setAvailability(Object.fromEntries(results.map((r) => [r.id, r.available])));
     });
@@ -388,52 +346,37 @@ export function StellarWalletPicker({ onConnect }: WalletPickerProps) {
     onConnect(wallet.id, publicKey);
   }
 
-  return (
-    <div className="wallet-picker">
-      {STELLAR_WALLETS.map((wallet) => {
-        const available = availability[wallet.id] ?? false;
-        return (
-          <button
-            key={wallet.id}
-            onClick={() => (available ? handleConnect(wallet) : window.open(wallet.downloadUrl))}
-            className={available ? "wallet-btn available" : "wallet-btn install"}
-            aria-label={available ? `Connect ${wallet.name}` : `Install ${wallet.name}`}
-          >
-            <img src={wallet.icon} alt={wallet.name} width={32} height={32} />
-            <span>{wallet.name}</span>
-            {!available && wallet.requiresExtension && (
-              <span className="badge">Install</span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return STELLAR_WALLETS.map((wallet) => {
+    const available = availability[wallet.id] ?? false;
+    return {
+      wallet,
+      available,
+      onPress: () => available ? handleConnect(wallet) : window.open(wallet.downloadUrl),
+    };
+  });
 }
 ```
 
-### Hooking the picker into Wraith key derivation
+### Hook the picker into Wraith key derivation
 
 ```typescript
 import { deriveStealthKeys, STEALTH_SIGNING_MESSAGE } from "@wraith-protocol/sdk/chains/stellar";
-import { STELLAR_WALLETS } from "./wallets";
+import { STELLAR_WALLETS, StellarWalletId } from "./wallets";
 
 async function connectAndDeriveKeys(walletId: StellarWalletId) {
   const wallet = STELLAR_WALLETS.find((w) => w.id === walletId)!;
-
   const publicKey = await wallet.connect();
   const sigBytes = await wallet.signMessage(STEALTH_SIGNING_MESSAGE);
   const keys = deriveStealthKeys(sigBytes);
-
   return { publicKey, keys };
 }
 ```
 
 ---
 
-## Stellar Wallets Kit (Alternative)
+## Stellar Wallets Kit
 
-[Stellar Wallets Kit](https://github.com/Creit-Tech/Stellar-Wallets-Kit) is a community library that abstracts all Stellar wallets behind a single interface — less boilerplate than managing each wallet separately.
+[Stellar Wallets Kit](https://github.com/Creit-Tech/Stellar-Wallets-Kit) wraps all wallets behind one interface.
 
 ```bash
 npm install @creit.tech/stellar-wallets-kit
@@ -446,8 +389,6 @@ import {
   StellarWalletsKit,
   WalletNetwork,
   FREIGHTER_ID,
-  ALBEDO_ID,
-  XBULL_ID,
   allowAllModules,
 } from "@creit.tech/stellar-wallets-kit";
 
@@ -458,14 +399,14 @@ const kit = new StellarWalletsKit({
 });
 ```
 
-### Open built-in modal
+### Open the built-in modal
 
 ```typescript
 await kit.openModal({
   onWalletSelected: async (option) => {
     kit.setWallet(option.id);
     const { address } = await kit.getAddress();
-    console.log(address); // "G..."
+    console.log(address);
   },
 });
 ```
@@ -476,7 +417,7 @@ await kit.openModal({
 const { signedTxXdr } = await kit.signTransaction(unsignedXdr);
 ```
 
-### Derive stealth keys via kit
+### Derive stealth keys
 
 ```typescript
 import { STEALTH_SIGNING_MESSAGE, deriveStealthKeys } from "@wraith-protocol/sdk/chains/stellar";
@@ -486,26 +427,24 @@ const sigBytes = Buffer.from(signedMessage, "base64");
 const keys = deriveStealthKeys(sigBytes);
 ```
 
-### Kit vs manual integration
+### Kit vs manual
 
 | | Manual | Stellar Wallets Kit |
 |---|---|---|
 | Setup | Per-wallet packages | One package |
-| Bundle size | Smaller (tree-shakeable) | Larger (all wallets) |
-| UI | Bring your own | Built-in modal |
-| Customization | Full control | Limited styling |
+| Bundle size | Smaller | Larger |
+| UI | Custom | Built-in modal |
+| Customization | Full | Limited |
 | New wallets | Manual update | Library update |
-
-Use the kit for fast integration. Use the manual approach when you need custom UI or want to minimize bundle size.
 
 ---
 
 ## WalletConnect v2
 
-WalletConnect v2 support is on the Wraith SDK roadmap. When available, the pattern will follow the standard WalletConnect modal flow:
+WalletConnect v2 support is on the Wraith SDK roadmap. Pattern for when it ships:
 
 ```typescript
-// Coming soon — pattern reference only
+// Coming soon
 import { createWalletClient } from "@walletconnect/stellar-provider";
 
 const provider = await createWalletClient({
@@ -519,16 +458,12 @@ const provider = await createWalletClient({
 });
 
 await provider.connect();
-const accounts = provider.accounts; // ["G..."]
+const accounts = provider.accounts;
 ```
-
-WalletConnect enables mobile wallet connections via QR code or deep link — relevant for LOBSTR mobile and any wallet that doesn't have a browser extension. Watch the [SDK changelog](https://github.com/wraith-protocol) for availability.
 
 ---
 
 ## Session Persistence
-
-Prompting users to reconnect every page load degrades UX. Persist wallet choice and public key in `localStorage` and re-verify silently on load.
 
 ```typescript
 const SESSION_KEY = "wraith:stellar:session";
@@ -539,56 +474,40 @@ interface StellarSession {
   connectedAt: number;
 }
 
-// Save session after successful connect
 function saveSession(walletId: StellarWalletId, publicKey: string) {
-  const session: StellarSession = {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({
     walletId,
     publicKey,
     connectedAt: Date.now(),
-  };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }));
 }
 
-// Restore session on app load
 async function restoreSession(): Promise<StellarSession | null> {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
 
   const session: StellarSession = JSON.parse(raw);
-
-  // Verify the wallet is still connected and key matches
   const wallet = STELLAR_WALLETS.find((w) => w.id === session.walletId);
   if (!wallet) return null;
 
   try {
     const available = await wallet.isAvailable();
-    if (!available) {
-      clearSession();
-      return null;
-    }
+    if (!available) { localStorage.removeItem(SESSION_KEY); return null; }
 
-    // Re-confirm public key matches (catches account switches)
     const currentKey = await wallet.connect();
-    if (currentKey !== session.publicKey) {
-      clearSession();
-      return null;
-    }
+    if (currentKey !== session.publicKey) { localStorage.removeItem(SESSION_KEY); return null; }
 
     return session;
   } catch {
-    clearSession();
+    localStorage.removeItem(SESSION_KEY);
     return null;
   }
 }
-
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
 ```
 
-### Using session in a React app
+### React hook
 
-```tsx
+```typescript
 import { useEffect, useState } from "react";
 
 export function useWalletSession() {
@@ -596,10 +515,7 @@ export function useWalletSession() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    restoreSession().then((s) => {
-      setSession(s);
-      setLoading(false);
-    });
+    restoreSession().then((s) => { setSession(s); setLoading(false); });
   }, []);
 
   async function connect(walletId: StellarWalletId) {
@@ -610,7 +526,7 @@ export function useWalletSession() {
   }
 
   function disconnect() {
-    clearSession();
+    localStorage.removeItem(SESSION_KEY);
     setSession(null);
   }
 
@@ -620,11 +536,9 @@ export function useWalletSession() {
 
 ---
 
-## Mobile Wallet Considerations
+## Mobile Considerations
 
-Most Stellar browser extensions don't run on mobile. Plan for this explicitly.
-
-### Detection pattern
+Most Stellar extensions do not run on mobile. Filter wallets by platform:
 
 ```typescript
 function isMobile(): boolean {
@@ -633,7 +547,6 @@ function isMobile(): boolean {
 
 function getRecommendedWallets(): StellarWallet[] {
   if (isMobile()) {
-    // Albedo (web) and LOBSTR (mobile) work on mobile
     return STELLAR_WALLETS.filter((w) => !w.requiresExtension || w.id === "lobstr");
   }
   return STELLAR_WALLETS;
@@ -645,41 +558,16 @@ function getRecommendedWallets(): StellarWallet[] {
 | Wallet | iOS | Android | Notes |
 |---|---|---|---|
 | Freighter | No | No | Desktop extension only |
-| Albedo | Yes | Yes | Web-based, works in any browser |
+| Albedo | Yes | Yes | Web-based |
 | xBull | Yes | Yes | PWA available |
-| LOBSTR | Yes | Yes | Native app + extension bridge |
-| WalletConnect v2 | Yes | Yes | Deep link / QR code (coming soon) |
+| LOBSTR | Yes | Yes | Native app |
+| WalletConnect v2 | Yes | Yes | Coming soon |
 
-### Recommended mobile flow
-
-```tsx
-function WalletPickerAdaptive({ onConnect }) {
-  const mobile = isMobile();
-  const wallets = getRecommendedWallets();
-
-  return (
-    <div>
-      {mobile && (
-        <p className="hint">
-          On mobile, use Albedo or LOBSTR. WalletConnect coming soon.
-        </p>
-      )}
-      {wallets.map((wallet) => (
-        <WalletButton key={wallet.id} wallet={wallet} onConnect={onConnect} />
-      ))}
-    </div>
-  );
-}
-```
-
-### Deep link fallback for LOBSTR on mobile
-
-When the LOBSTR extension isn't available, you can prompt users to open the LOBSTR mobile app directly:
+### LOBSTR deep link fallback
 
 ```typescript
 function openLobstrMobile(xdr: string) {
-  const encoded = encodeURIComponent(xdr);
-  window.location.href = `lobstr://sign?xdr=${encoded}`;
+  window.location.href = `lobstr://sign?xdr=${encodeURIComponent(xdr)}`;
 }
 ```
 
@@ -687,11 +575,10 @@ function openLobstrMobile(xdr: string) {
 
 ## Related Resources
 
-- [Stellar Primitives SDK Reference](/sdk/chains/stellar) — `deriveStealthKeys`, `generateStealthAddress`, `scanAnnouncements`
-- [Stellar Contracts Reference](/contracts/stellar) — Soroban contract interfaces
-- [Stellar Event Schemas (v2)](/reference/stellar-event-schemas) — announcement event filtering
-- [Stellar Mainnet Deployment](/guides/stellar-mainnet-deployment) — operator guide
+- [Stellar Primitives SDK Reference](/sdk/chains/stellar)
+- [Stellar Contracts Reference](/contracts/stellar)
+- [Stellar Event Schemas (v2)](/reference/stellar-event-schemas)
+- [Stellar Mainnet Deployment](/guides/stellar-mainnet-deployment)
 - [Freighter API docs](https://docs.freighter.app)
 - [Albedo docs](https://albedo.link/docs)
-- [xBull SDK](https://github.com/Creit-Tech/xBull-Wallet)
 - [Stellar Wallets Kit](https://github.com/Creit-Tech/Stellar-Wallets-Kit)
