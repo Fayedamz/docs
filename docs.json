@@ -118,6 +118,14 @@
               "guides/single-chain-agent",
               "guides/multichain-agent",
               "guides/bring-your-own-model",
+              "guides/privacy-best-practices"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "guides/stellar-mainnet-deployment",
+            "guides/stellar-multisig-withdrawal"
               "guides/privacy-best-practices",
               "guides/spectre-stellar-cookbook",
               "guides/stellar-federation",
